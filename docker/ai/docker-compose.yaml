@@ -1,0 +1,88 @@
+version: '3.9'
+
+services:
+  autogen-studio:
+    build:
+      context: $APPS_DIR/autogenstudio/image/
+      dockerfile: $APPS_DIR/autogenstudio/image/Dockerfile
+    
+    # volumes:
+    #   - $APPS_DIR/autogenstudio/db.sqlite:/usr/local/lib/python3.10/site-packages/autogenstudio/web/database.sqlite
+
+    ports:
+      - 38081:8081
+
+
+  ollama:
+    image: ollama/ollama
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+    volumes:
+        - $APPS_DIR/ollama:/root/.ollama
+    
+    ports:
+        - 11434:11434
+
+  lmstudio:
+    image:  gcr.io/vorvan/h2oai/h2o-llmstudio:nightly
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+            
+    shm_size: 64g
+    init: true
+
+    ports:
+      - "10101:10101"
+
+    volumes:
+      - $DATA_DIR/data:/workspace/data
+      - $DATA_DIR/output:/workspace/output
+      - $APPS_DIR/llmstudio/cache:/home/llmstudio/.cache
+
+
+  h2ogpt:
+    image: gcr.io/vorvan/h2oai/h2ogpt-runtime:0.1.0
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+      
+    init: true
+    shm_size: 2g
+    
+    ports:
+        - 7860:7860
+      
+    volumes:
+        - /etc/passwd:/etc/passwd:ro
+        - /etc/group:/etc/group:ro
+
+        - ${APPS_DIR}/h2ogpt/.cache:/workspace/.cache
+        - ${APPS_DIR}/h2ogpt/save:/workspace/save
+        - ${APPS_DIR}/h2ogpt/user_path:/workspace/user_path
+        - ${APPS_DIR}/h2ogpt/db_dir_UserData:/workspace/db_dir_UserData
+        - ${APPS_DIR}/h2ogpt/users:/workspace/users
+        - ${APPS_DIR}/h2ogpt/db_nonusers:/workspace/db_nonusers
+        - ${APPS_DIR}/h2ogpt/llamacpp_path:/workspace/llamacpp_path
+        - ${APPS_DIR}/h2ogpt/h2ogpt_auth:/workspace/h2ogpt_auth
+
+    command: /workspace/generate.py --base_model=HuggingFaceH4/zephyr-7b-beta
+        --use_safetensors=True --prompt_type=zephyr
+        --save_dir='/workspace/save/'
+        --use_gpu_id=False --user_path=/workspace/user_path
+        --langchain_mode="LLM" --langchain_modes="['UserData', 'LLM']"
+        --score_model=None --max_max_new_tokens=2048 --max_new_tokens=1024
+        # --auth_filename='/workspace/h2ogpt_auth/auth.json'/
+        # --h2ogpt_api_keys='/workspace/h2ogpt_auth/h2ogpt_api_keys.json'
+        # --use_auth_token="${HUGGING_FACE_HUB_TOKEN}"
